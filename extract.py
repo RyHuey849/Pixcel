@@ -54,12 +54,17 @@ CELL_BOTTOM = 15
 # that follows is centre-aligned, so a long class name ("Thunder Breaker")
 # can reach back to about +64 while a truncated name can reach +68 - the two
 # columns overlap, so no single fixed edge separates them. Cutting at the last
-# blank gap inside NAME_SEAM recovers the few px of slack; when the name and
-# class genuinely touch it falls back to NAME_BOX and clean_name() drops the
-# stray glyph.
+# sufficiently wide blank gap inside NAME_SEAM recovers the few px of slack;
+# when the name and class genuinely touch it falls back to NAME_BOX and
+# clean_name() drops the stray glyph.
 NAME_BOX = (-2, 69)
 NAME_SEAM = (48, 69)  # window searched for the name/class gap
-SEAM_GAP = 2  # blank columns needed to count as a gap, not letter spacing
+# Blank columns needed to count as the name/class seam rather than letter
+# spacing. Measured across the sample set: gaps *inside* a word are never wider
+# than 2px, while a genuine name/class gap is 6px or more. At 2 the search
+# happily stopped on a letter gap and truncated the name ("FARENHEIT" ->
+# "FARENHE"); 3 is the smallest value that cannot match letter spacing.
+SEAM_GAP = 3
 
 # The three stat columns are centre-aligned, not right-aligned: "0" and "1,000"
 # share a midpoint. Hence centre + half-width rather than a left edge. The
@@ -71,7 +76,17 @@ STAT_HALF_WIDTH = 21  # fits "1,000" (29px wide) with room to spare
 # crops are upscaled before recognition.
 UPSCALE = 4
 PAD = 12  # white border; Tesseract needs quiet space around the glyphs
-STAT_ALLOWLIST = "0123456789,"  # comma: thousands separator in "1,000"
+
+# DESIGN DECISION: no tessedit_char_whitelist on the stat columns, even though
+# they only ever hold digits. The LSTM engine applies the whitelist by discarding
+# disallowed characters *after* recognition, so a cell whose best hypothesis is a
+# letter comes back empty rather than falling through to the best digit - and
+# to_int() then silently reports 0, which is a plausible-looking wrong answer.
+# Measured over all 504 stat cells in the sample set, unconstrained psm 7 reads
+# every cell correctly except that this font's "9" is always read as "g" (4/4).
+# So: recognise unconstrained, then repair that one known lookalike. Constraining
+# the alphabet traded 5 silent zeros for nothing.
+DIGIT_LOOKALIKES = str.maketrans({"g": "9"})
 
 # Ink detection. The panel is a dark dithered texture with light text, so
 # "brighter than the median by a margin" separates the two cleanly.
@@ -168,20 +183,19 @@ def preprocess(patch):
                               cv2.BORDER_CONSTANT, value=255)
 
 
-def ocr(patch, allowlist=None):
+def ocr(patch):
     """Run Tesseract on a single pre-processed cell and return raw text."""
     # psm 7 = "a single line of text", which is exactly what a cell holds.
-    config = "--psm 7"
-    if allowlist:
-        # Constraining the alphabet is the single biggest accuracy win on the
-        # stat columns: it stops 0/O, 1/l and 5/S being confused.
-        config += f" -c tessedit_char_whitelist={allowlist}"
-    return pytesseract.image_to_string(patch, config=config).strip()
+    return pytesseract.image_to_string(patch, config="--psm 7").strip()
 
 
 def to_int(text):
-    """Coerce OCR output to an int. Strips the thousands comma in '1,000'."""
-    digits = re.sub(r"\D", "", text)
+    """Coerce a stat cell to an int: repair known lookalikes, then keep digits.
+
+    Dropping the leftover non-digits is what absorbs the thousands separator
+    in "1,000".
+    """
+    digits = re.sub(r"\D", "", text.translate(DIGIT_LOOKALIKES))
     return int(digits) if digits else 0
 
 
@@ -205,8 +219,10 @@ def extract(path, debug_dir=None):
 
     ink = ink_mask(gray)
     x0, y0, row_count = locate_grid(ink)
+    # Each column is (key, bounds, parser) - the parser is what makes a cell a
+    # name or a stat, so adding a column never touches the loop below.
     stat_columns = [
-        (f"stat_{i + 1}", (c - STAT_HALF_WIDTH, c + STAT_HALF_WIDTH), STAT_ALLOWLIST)
+        (f"stat_{i + 1}", (c - STAT_HALF_WIDTH, c + STAT_HALF_WIDTH), to_int)
         for i, c in enumerate(STAT_CENTRES)
     ]
 
@@ -216,12 +232,11 @@ def extract(path, debug_dir=None):
         # per row; the stat columns are rigid.
         name_box = (NAME_BOX[0], name_right_edge(ink, x0, y0, row_index))
         record = {}
-        for key, (left, right), allowlist in [("name", name_box, None)] + stat_columns:
+        for key, (left, right), parse in [("name", name_box, clean_name)] + stat_columns:
             patch = preprocess(cell(gray, x0, y0, row_index, left, right))
             if debug_dir is not None:
                 cv2.imwrite(str(debug_dir / f"r{row_index:02d}_{key}.png"), patch)
-            text = ocr(patch, allowlist)
-            record[key] = clean_name(text) if allowlist is None else to_int(text)
+            record[key] = parse(ocr(patch))
 
         # A blank name means the crop landed past the populated rows.
         if record["name"]:

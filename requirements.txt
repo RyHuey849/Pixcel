@@ -1,2 +1,6 @@
+# headless: the pipeline only uses imread/resize/threshold, no GUI windows,
+# and the backend this feeds is a FastAPI server.
+opencv-python-headless>=4.8
+numpy>=1.24
 pillow>=10.0
 pytesseract>=0.3.10
