@@ -23,8 +23,12 @@ from pathlib import Path
 from extract import extract
 from preprocessing import STAGES
 
-SAMPLE_DIR = Path("sample pictures")
-TRUTH_PATH = Path("ground_truth.json")
+# Anchored to the repo root rather than the working directory: the sample set and
+# its ground truth are shared test data that live above backend/, so this script
+# runs the same from either directory.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SAMPLE_DIR = REPO_ROOT / "sample pictures"
+TRUTH_PATH = REPO_ROOT / "ground_truth.json"
 
 FIELDS = ("name", "stat_1", "stat_2", "stat_3")
 
