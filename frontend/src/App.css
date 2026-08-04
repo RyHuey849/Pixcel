@@ -43,48 +43,285 @@ code {
   border-radius: 4px;
 }
 
-.picker {
-  display: block;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  padding: 1.25rem;
-  margin-bottom: 1.5rem;
+/* Hidden from sight but still focusable and announced - the file input inside
+   the dropzone. `display: none` would take it out of the tab order and strip
+   the keyboard access the <label> wrapper exists to preserve. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.result {
-  margin-bottom: 2rem;
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 2rem 1.25rem;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 120ms, background-color 120ms;
 }
 
-.result h3 {
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin: 0 0 0.5rem;
+.dropzone:hover:not(.disabled),
+/* :focus-within, because the focus lands on the hidden input, not the label. */
+.dropzone:focus-within {
+  border-color: var(--accent);
+}
+
+.dropzone.dragging {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.dropzone.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.dropzone-title {
   color: var(--text-h);
+  font-weight: 500;
 }
 
-table {
+.staged {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.staged-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.thumb {
+  width: 96px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--code-bg);
+  flex-shrink: 0;
+}
+
+.staged-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* lets the ellipsis below actually engage inside the flex row */
+  flex: 1;
+}
+
+.staged-name {
+  color: var(--text-h);
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remove {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.remove:hover:not(:disabled) {
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+button.primary,
+button.secondary {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.primary {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+}
+
+button.secondary {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinner-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.spinner {
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-top-color: transparent; /* the gap that makes the rotation readable */
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Respect a reduced-motion preference: keep the indicator, drop the spin. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}
+
+.summary {
+  margin-bottom: 1rem;
+}
+
+.export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.header-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.export .detail {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.copy-fallback {
+  flex-basis: 100%;
+  margin-top: 0.5rem;
+}
+
+.fallback-text {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: var(--code-bg);
+  color: var(--text-h);
+  resize: vertical;
+}
+
+.edit-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
 
-th,
-td {
+.edit-table th,
+.edit-table td {
   border-bottom: 1px solid var(--border);
-  padding: 0.35rem 0.5rem;
+  padding: 0.15rem 0.35rem;
   text-align: left;
 }
 
-th {
+.edit-table th {
   font-weight: 500;
   opacity: 0.6;
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  padding-bottom: 0.4rem;
 }
 
-td {
+.col-index {
+  width: 2.5rem;
+  text-align: right;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.col-actions {
+  width: 3.5rem;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.source {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.6;
+  font-size: 0.8rem;
+}
+
+/* Cells read as text until focused - a grid of boxed inputs is much harder to
+   scan for the one wrong value, which is the job this table exists for. */
+.cell {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
   color: var(--text-h);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.25rem 0.35rem;
+}
+
+.cell:hover {
+  border-color: var(--border);
+}
+
+.cell:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
 }
 
 /* Stats are numeric - right-aligned and tabular so digits line up column-wise,
@@ -93,4 +330,36 @@ td {
   text-align: right;
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* Edited cells are marked so a reviewer can see at a glance what they changed
+   versus what the OCR produced. */
+.cell.edited {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.cell.invalid {
+  border-color: #c62828;
+  color: #c62828;
+}
+
+.row-action {
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.2rem 0.25rem;
+  opacity: 0.45;
+}
+
+.row-action:hover {
+  opacity: 1;
+  color: var(--text-h);
+}
+
+.edit-table tr:hover .row-action {
+  opacity: 0.8;
 }
