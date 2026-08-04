@@ -215,6 +215,87 @@ button:disabled {
   margin-bottom: 1rem;
 }
 
+.progress {
+  margin: 1.25rem 0;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  margin-bottom: 0.4rem;
+}
+
+.progress-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill {
+    transition: none;
+  }
+}
+
+.notice {
+  font-size: 0.875rem;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0 0;
+}
+
+.notice-ok {
+  color: #2e7d32;
+  background: rgba(46, 125, 50, 0.1);
+}
+
+.notice-fail {
+  color: #c62828;
+  background: rgba(198, 40, 40, 0.1);
+}
+
+.failures {
+  margin-bottom: 1.25rem;
+}
+
+.failure-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.failure-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  border-left: 2px solid #c62828;
+  padding-left: 0.6rem;
+}
+
+.failure-name {
+  color: var(--text-h);
+}
+
 .export {
   display: flex;
   flex-wrap: wrap;

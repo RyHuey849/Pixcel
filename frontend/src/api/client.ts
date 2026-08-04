@@ -21,11 +21,15 @@ export class ApiError extends Error {
   // property: the tsconfig sets erasableSyntaxOnly, which bars TS-only syntax
   // that has to emit runtime code.
   readonly status: number
+  /** The server's explanation on its own, without the request context that
+   *  `message` prepends - what the UI shows a user. */
+  readonly detail: string
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, detail: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -58,6 +62,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(
       `${init?.method ?? 'GET'} ${path} failed: ${detail}`,
       response.status,
+      detail,
     )
   }
   return (await response.json()) as T
@@ -69,14 +74,31 @@ export function getHealth(): Promise<Health> {
 }
 
 /**
- * Upload screenshots for OCR. Results come back in upload order.
+ * Upload ONE screenshot for OCR.
+ *
+ * DESIGN DECISION: the endpoint accepts a batch, but the app sends one file per
+ * request. A batch is a single opaque wait - there is no way to report how far
+ * through it the server is, and one unreadable file fails the whole thing.
+ * Sequential single-file requests give both a real progress count and per-file
+ * error isolation, which is what this screen needs; the extra round trips are
+ * negligible next to the seconds of OCR each image costs.
  *
  * The Content-Type header is deliberately not set: fetch derives it from the
  * FormData, including the multipart boundary, which cannot be written by hand.
  */
-export function parseImages(files: File[]): Promise<FileResult[]> {
+export async function parseImage(file: File): Promise<FileResult> {
   const body = new FormData()
-  // Repeated "files" parts - matches the list[UploadFile] parameter name.
-  for (const file of files) body.append('files', file)
-  return request<FileResult[]>('/parse', { method: 'POST', body })
+  // The part name matches the list[UploadFile] parameter in main.py.
+  body.append('files', file)
+
+  const results = await request<FileResult[]>('/parse', { method: 'POST', body })
+  const result = results[0]
+  if (!result) {
+    throw new ApiError(
+      'backend returned no result for this file',
+      200,
+      'the server accepted the file but returned nothing for it',
+    )
+  }
+  return result
 }

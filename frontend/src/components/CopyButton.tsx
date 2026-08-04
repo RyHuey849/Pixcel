@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Notice } from './Notice'
 
 // Copies text to the clipboard, with a visible confirmation and a manual
 // fallback.
@@ -12,12 +13,19 @@ import { useEffect, useRef, useState } from 'react'
 interface CopyButtonProps {
   text: string
   label: string
+  /** Shown in the confirmation after a successful copy. */
+  successMessage: string
   disabled?: boolean
 }
 
 type State = 'idle' | 'copied' | 'failed'
 
-export function CopyButton({ text, label, disabled = false }: CopyButtonProps) {
+export function CopyButton({
+  text,
+  label,
+  successMessage,
+  disabled = false,
+}: CopyButtonProps) {
   const [state, setState] = useState<State>('idle')
   const fallbackRef = useRef<HTMLTextAreaElement>(null)
   const timer = useRef<number | undefined>(undefined)
@@ -29,9 +37,15 @@ export function CopyButton({ text, label, disabled = false }: CopyButtonProps) {
   async function copy() {
     window.clearTimeout(timer.current)
     try {
+      // `clipboard` is undefined entirely outside a secure context, so check
+      // before reaching for writeText; the catch below then handles both the
+      // missing-API and the rejected-permission cases identically.
+      if (!navigator.clipboard) throw new Error('clipboard unavailable')
       await navigator.clipboard.writeText(text)
       setState('copied')
-      timer.current = window.setTimeout(() => setState('idle'), 2000)
+      // Long enough to read, short enough that it does not linger over the
+      // next action.
+      timer.current = window.setTimeout(() => setState('idle'), 4000)
     } catch {
       setState('failed')
     }
@@ -54,12 +68,14 @@ export function CopyButton({ text, label, disabled = false }: CopyButtonProps) {
         {state === 'copied' ? 'Copied ✓' : label}
       </button>
 
+      {state === 'copied' && <Notice tone="ok">{successMessage}</Notice>}
+
       {state === 'failed' && (
         <div className="copy-fallback">
-          <p className="detail fail">
+          <Notice tone="fail">
             Could not reach the clipboard. Press Ctrl+C to copy the selected
             text below.
-          </p>
+          </Notice>
           <textarea
             ref={fallbackRef}
             className="fallback-text"

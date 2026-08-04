@@ -1,63 +1,55 @@
 import { useMemo, useState } from 'react'
-import { parseImages } from '../api/client'
 import { isValidStat, STAT_FIELDS, useEditableRows } from '../hooks/useEditableRows'
+import { useParseBatch, type FileOutcome } from '../hooks/useParseBatch'
 import { useStagedFiles } from '../hooks/useStagedFiles'
 import { toTsv } from '../lib/tsv'
 import { CopyButton } from './CopyButton'
 import { Dropzone } from './Dropzone'
 import { EditableTable } from './EditableTable'
+import { Notice } from './Notice'
+import { ProgressBar } from './ProgressBar'
 import { Spinner } from './Spinner'
 import { StagedImages } from './StagedImages'
 
-// Stage screenshots, process them, then review and correct the rows.
+// Stage screenshots, process them, then review, correct and copy the rows.
 //
 // DESIGN DECISION: processing is an explicit button rather than firing on
 // selection. OCR takes seconds per image, so the user needs a chance to remove a
 // wrong file before paying for it - which is the whole point of the preview
-// queue. It also makes "add three more, then run" a single request.
-
-type Phase =
-  | { status: 'idle' }
-  | { status: 'processing' }
-  | { status: 'done'; fileCount: number }
-  | { status: 'error'; message: string }
+// queue. It also makes "add three more, then run" a single action.
 
 export function ParsePanel() {
   const staged = useStagedFiles()
+  const batch = useParseBatch()
   const table = useEditableRows()
-  const [phase, setPhase] = useState<Phase>({ status: 'idle' })
+  const [hasRun, setHasRun] = useState(false)
   // Off by default: the common repeat action is appending to a sheet that
   // already has headers, where a second header row would land as data.
   const [includeHeader, setIncludeHeader] = useState(false)
 
-  const busy = phase.status === 'processing'
-
   async function process() {
-    if (staged.files.length === 0 || busy) return
-
-    setPhase({ status: 'processing' })
-    try {
-      // The staged order is the upload order, which the API preserves in its
-      // response - so the table reads in the same order as the queue above.
-      const results = await parseImages(staged.files.map((s) => s.file))
-      table.load(results)
-      setPhase({ status: 'done', fileCount: results.length })
-    } catch (error: unknown) {
-      setPhase({
-        status: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
+    if (staged.files.length === 0 || batch.running) return
+    setHasRun(true)
+    const results = await batch.run(staged.files.map((s) => s.file))
+    table.load(results)
   }
 
   function reset() {
     staged.clear()
     table.clear()
-    setPhase({ status: 'idle' })
+    batch.reset()
+    setHasRun(false)
   }
 
-  // Counted here rather than in the table so the summary can be shown above it,
-  // where it is visible without scrolling a long result set.
+  // Type predicate so `failure.message` is reachable below - a plain boolean
+  // filter leaves the union unnarrowed.
+  const failures = batch.outcomes.filter(
+    (outcome): outcome is Extract<FileOutcome, { ok: false }> => !outcome.ok,
+  )
+  const parsedCount = batch.outcomes.length - failures.length
+
+  // Counted here rather than in the table so the summary sits above it, visible
+  // without scrolling a long result set.
   const invalidCount = table.rows.filter((row) =>
     STAT_FIELDS.some((field) => !isValidStat(row[field])),
   ).length
@@ -76,25 +68,27 @@ export function ParsePanel() {
     [table.rows, includeHeader],
   )
 
+  const showResults = hasRun && !batch.running
+
   return (
     <section>
-      <Dropzone onFiles={staged.add} disabled={busy} />
+      <Dropzone onFiles={staged.add} disabled={batch.running} />
 
       <StagedImages
         files={staged.files}
         onRemove={staged.remove}
-        disabled={busy}
+        disabled={batch.running}
       />
 
       <div className="actions">
         <button
           type="button"
           className="primary"
-          disabled={staged.files.length === 0 || busy}
+          disabled={staged.files.length === 0 || batch.running}
           onClick={() => void process()}
         >
-          {busy ? (
-            <Spinner label={`Processing ${staged.files.length}…`} />
+          {batch.running ? (
+            <Spinner label="Processing…" />
           ) : (
             `Process ${staged.files.length} image${
               staged.files.length === 1 ? '' : 's'
@@ -102,22 +96,45 @@ export function ParsePanel() {
           )}
         </button>
 
-        {(staged.files.length > 0 || table.rows.length > 0) && !busy && (
-          <button type="button" className="secondary" onClick={reset}>
-            Clear all
-          </button>
-        )}
+        {(staged.files.length > 0 || table.rows.length > 0) &&
+          !batch.running && (
+            <button type="button" className="secondary" onClick={reset}>
+              Clear all
+            </button>
+          )}
       </div>
 
-      {phase.status === 'error' && <p className="fail">{phase.message}</p>}
+      {batch.running && batch.progress && (
+        <ProgressBar progress={batch.progress} />
+      )}
 
-      {phase.status === 'done' && (
+      {/* Failures are listed whether or not anything succeeded, and name the
+          file so the user knows which one to replace. */}
+      {showResults && failures.length > 0 && (
+        <div className="failures">
+          <Notice tone="fail">
+            {failures.length} screenshot{failures.length === 1 ? '' : 's'} could
+            not be read
+            {parsedCount > 0 && ` — the other ${parsedCount} parsed fine`}.
+          </Notice>
+          <ul className="failure-list">
+            {failures.map((failure) => (
+              <li key={failure.filename}>
+                <span className="failure-name">{failure.filename}</span>
+                <span className="detail">{failure.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showResults && (
         <>
           <div className="summary">
             <p className="detail">
               {table.rows.length} row{table.rows.length === 1 ? '' : 's'} from{' '}
-              {phase.fileCount} file{phase.fileCount === 1 ? '' : 's'}
-              {' — edit any cell to correct the OCR.'}
+              {parsedCount} file{parsedCount === 1 ? '' : 's'}
+              {table.rows.length > 0 && ' — edit any cell to correct the OCR.'}
             </p>
             {invalidCount > 0 && (
               <p className="detail fail">
@@ -128,39 +145,44 @@ export function ParsePanel() {
           </div>
 
           {table.rows.length > 0 && (
-            <div className="export">
-              <CopyButton
-                text={tsv}
-                label={`Copy ${table.rows.length} row${
-                  table.rows.length === 1 ? '' : 's'
-                } for Sheets`}
-                disabled={!canCopy}
-              />
-              <label className="header-toggle">
-                <input
-                  type="checkbox"
-                  checked={includeHeader}
-                  onChange={(event) => setIncludeHeader(event.target.checked)}
+            <>
+              <div className="export">
+                <CopyButton
+                  text={tsv}
+                  label={`Copy ${table.rows.length} row${
+                    table.rows.length === 1 ? '' : 's'
+                  } for Sheets`}
+                  successMessage={`${table.rows.length} row${
+                    table.rows.length === 1 ? '' : 's'
+                  } copied — paste into Google Sheets with Ctrl+V.`}
+                  disabled={!canCopy}
                 />
-                Include header row
-              </label>
-              <p className="detail">
-                Copies tab-separated text — paste into Google Sheets and it fills
-                the columns directly.
-              </p>
-            </div>
+                <label className="header-toggle">
+                  <input
+                    type="checkbox"
+                    checked={includeHeader}
+                    onChange={(event) => setIncludeHeader(event.target.checked)}
+                  />
+                  Include header row
+                </label>
+                <p className="detail">
+                  Copies tab-separated text — paste into Google Sheets and it
+                  fills the columns directly.
+                </p>
+              </div>
+
+              <EditableTable
+                rows={table.rows}
+                onUpdate={table.updateCell}
+                onRemove={table.removeRow}
+                onRevert={table.revertRow}
+                showSource={parsedCount > 1}
+              />
+            </>
           )}
 
-          {table.rows.length === 0 ? (
+          {table.rows.length === 0 && failures.length === 0 && (
             <p className="detail">No rows found.</p>
-          ) : (
-            <EditableTable
-              rows={table.rows}
-              onUpdate={table.updateCell}
-              onRemove={table.removeRow}
-              onRevert={table.revertRow}
-              showSource={phase.fileCount > 1}
-            />
           )}
         </>
       )}
