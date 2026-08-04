@@ -54,7 +54,34 @@ cd frontend; npm run dev
 The Vite dev server proxies `/api` to the backend, so the React code only ever
 issues same-origin requests and no backend URL is baked into the bundle.
 
-Open http://localhost:5173 — the page reports whether it reached the API.
+Open http://localhost:5173 — pick one or more screenshots and the parsed rows
+appear below.
+
+## API
+
+Interactive docs at http://127.0.0.1:8000/docs.
+
+### `GET /api/health`
+
+Liveness probe. `{"status": "ok", "service": "pixcel-api"}`
+
+### `POST /api/parse`
+
+Multipart upload of one or more screenshots, as repeated `files` parts. Results
+come back in upload order.
+
+```json
+[
+  {
+    "filename": "page1.png",
+    "rows": [{ "name": "Aefher", "stat1": 8, "stat2": 0, "stat3": 0 }]
+  }
+]
+```
+
+Returns `400` naming the file if one cannot be decoded or holds no recognisable
+table — an empty row list is reserved for a screenshot of a genuinely empty
+table, so the two cases stay distinguishable.
 
 ## Benchmarking the OCR
 

@@ -242,8 +242,34 @@ def clean_name(text):
 # ---------------------------------------------------------------------------
 
 
+def decode_image(data):
+    """Decode raw image bytes to grayscale.
+
+    The API receives uploads as bytes, not paths. Decoding here rather than in
+    the route keeps every entry point into the pipeline on the same OpenCV read,
+    and spares the API a round-trip through a temporary file.
+    """
+    buffer = np.frombuffer(data, np.uint8)
+    gray = cv2.imdecode(buffer, cv2.IMREAD_GRAYSCALE)
+    if gray is None:
+        raise ValueError("could not decode image - unsupported or corrupt file")
+    return gray
+
+
 def extract(path, debug_dir=None, stages=STAGES, keep_empty=False, whitelist=True):
-    """Read every row from a screenshot. Returns a list of row dicts.
+    """Read every row from a screenshot on disk. Returns a list of row dicts."""
+    gray = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    if gray is None:
+        raise ValueError(f"could not read image: {path}")
+    return extract_image(gray, debug_dir, stages, keep_empty, whitelist)
+
+
+def extract_image(gray, debug_dir=None, stages=STAGES, keep_empty=False,
+                  whitelist=True):
+    """Read every row from an already-decoded grayscale screenshot.
+
+    Split out from extract() so an uploaded image can be parsed straight from
+    memory; extract() is now just this plus a file read.
 
     `whitelist` turns the per-column character restrictions off; like `stages`
     it exists so benchmark.py can measure what they are worth.
@@ -258,10 +284,6 @@ def extract(path, debug_dir=None, stages=STAGES, keep_empty=False, whitelist=Tru
     row would silently vanish and every later row would be compared against the
     wrong answer, which scores the misalignment rather than the OCR.
     """
-    gray = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    if gray is None:
-        raise ValueError(f"could not read image: {path}")
-
     ink = ink_mask(gray)
     x0, y0, row_count = locate_grid(ink)
     # Each column is (key, bounds, read, parse) - the reader supplies the

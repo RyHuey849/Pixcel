@@ -1,0 +1,96 @@
+/* Utilitarian styling - enough to read the OCR output and spot mistakes in it.
+   The reviewed/editable table is its own milestone and will bring its own UI. */
+
+.app {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  text-align: left;
+}
+
+header {
+  margin-bottom: 2rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0.75rem;
+  opacity: 0.7;
+}
+
+.ok {
+  color: #2e7d32;
+}
+
+.fail {
+  color: #c62828;
+}
+
+.detail {
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.picker {
+  display: block;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.result {
+  margin-bottom: 2rem;
+}
+
+.result h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin: 0 0 0.5rem;
+  color: var(--text-h);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+th {
+  font-weight: 500;
+  opacity: 0.6;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+td {
+  color: var(--text-h);
+}
+
+/* Stats are numeric - right-aligned and tabular so digits line up column-wise,
+   which is what makes a misread value easy to catch by eye. */
+.num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
