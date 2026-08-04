@@ -4,3 +4,9 @@ opencv-python-headless>=4.8
 numpy>=1.24
 pillow>=10.0
 pytesseract>=0.3.10
+
+# API layer. python-multipart is what lets FastAPI accept the multipart uploads
+# the screenshot endpoint will take in a later milestone.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
